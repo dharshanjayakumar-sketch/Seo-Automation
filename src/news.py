@@ -15,23 +15,27 @@ NEWS_FEEDS = [
     "https://searchengineland.com/feed/",
 ]
 
-EMAIL_SENDER = "dharshan.jayakumar@joytechnologies.com"
+EMAIL_SENDER = "dharshanofficial134@gmail.com"
 
 EMAIL_RECEIVERS = [
-    "sakthi.abirami@joytechnologies.com"
+    "sakthi.abirami@joytechnologies.com",
+    "dharshanofficial134@gmail.com"
 ]
 
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+EMAIL_PASSWORD = "abcdefghijklmnop"
 
 # ---------------- FETCH ---------------- #
 
-def get_article_text(url):
+def get_article_data(url):
     try:
         r = requests.get(url, timeout=10)
-        soup = BeautifulSoup(r.text, "html.parser")
-        return " ".join(p.get_text() for p in soup.find_all("p"))
-    except:
-        return ""
+        html = r.text
+        soup = BeautifulSoup(html, "html.parser")
+        text = " ".join(p.get_text() for p in soup.find_all("p"))
+        return text, html
+    except Exception as e:
+        print("Error fetching article:", str(e))
+        return "", ""
 
 
 def get_articles():
@@ -41,10 +45,15 @@ def get_articles():
         parsed = feedparser.parse(feed)
 
         for entry in parsed.entries[:3]:
-            text = get_article_text(entry.link)
+            text, html = get_article_data(entry.link)
 
             if len(text) > 300:
-                articles.append(text)
+                articles.append({
+                    "title": entry.title,
+                    "link": entry.link,
+                    "content": text,
+                    "html": html
+                })
 
     return articles
 
@@ -52,24 +61,41 @@ def get_articles():
 # ---------------- PROCESS ---------------- #
 
 def generate_summary(text):
-    return text[:200] + "..."
+    sentences = text.split(".")
+    return ".".join(sentences[:2]) + "."
 
+
+BAD_DOMAINS = [
+    "facebook.com", "twitter.com", "linkedin.com",
+    "youtube.com", "google.com"
+]
 
 # ---------------- MAIN ---------------- #
 
 print("Fetching news...")
 articles = get_articles()
 
+if not articles:
+    raise ValueError("No articles fetched")
+
 geo_updates = []
 domains = []
 
 for article in articles:
-    if detect_geo_expansion(article):
-        geo_updates.append(article[:150])
+    content = article["content"]
 
-    domains.extend(extract_domains(article))
+    if detect_geo_expansion(content):
+        geo_updates.append(article["title"])
 
-domains = list(set(domains))[:10]
+    domains.extend(extract_domains(article["html"]))
+
+# clean domains
+domains = [
+    d for d in domains
+    if not any(bad in d for bad in BAD_DOMAINS)
+]
+
+domains = sorted(set(domains))[:15]
 
 # ---------------- EMAIL ---------------- #
 
@@ -80,17 +106,17 @@ html_content = f"""
 
 <h3>Updates</h3>
 <ul>
-{''.join(f"<li>{generate_summary(a)}</li>" for a in articles)}
+{''.join(f"<li><a href='{a['link']}'>{a['title']}</a><br>{generate_summary(a['content'])}</li>" for a in articles)}
 </ul>
 
 <h3>Geo Expansion</h3>
 <ul>
-{''.join(f"<li>{g}</li>" for g in geo_updates)}
+{''.join(f"<li>{g}</li>" for g in geo_updates) or "<li>No major geo signals</li>"}
 </ul>
 
 <h3>Outreach Domains</h3>
 <ul>
-{''.join(f"<li>{d}</li>" for d in domains)}
+{''.join(f"<li>{d}</li>" for d in domains) or "<li>No domains found</li>"}
 </ul>
 """
 
@@ -101,9 +127,20 @@ msg["To"] = ", ".join(EMAIL_RECEIVERS)
 
 print("Sending email...")
 
-server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
-server.login(EMAIL_SENDER, EMAIL_PASSWORD)
-server.sendmail(EMAIL_SENDER, EMAIL_RECEIVERS, msg.as_string())
-server.quit()
+# 🔍 DEBUG CHECK
+print("EMAIL_PASSWORD value:", EMAIL_PASSWORD)
 
-print("Done ✅")
+if EMAIL_PASSWORD is None:
+    raise ValueError("❌ EMAIL_PASSWORD not found. Fix GitHub Secrets.")
+
+try:
+    server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+    server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+    server.sendmail(EMAIL_SENDER, EMAIL_RECEIVERS, msg.as_string())
+    server.quit()
+
+    print("✅ Email sent successfully")
+
+except Exception as e:
+    print("❌ Email failed:", str(e))
+    raise
