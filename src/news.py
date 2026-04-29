@@ -36,7 +36,10 @@ def get_article_data(url):
     try:
         r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
         soup = BeautifulSoup(r.text, "html.parser")
-        text = " ".join(p.get_text() for p in soup.find_all("p"))
+
+        paragraphs = [p.get_text() for p in soup.find_all("p")]
+        text = " ".join(paragraphs)
+
         return text, r.text
     except:
         return "", ""
@@ -59,8 +62,27 @@ def get_articles():
 
 def clean_summary(text):
     text = re.sub(r"\s+", " ", text)
+
     sentences = text.split(".")
-    clean = [s.strip() for s in sentences if len(s.strip()) > 40]
+    seen = set()
+    clean = []
+
+    for s in sentences:
+        s = s.strip()
+
+        if len(s) < 40:
+            continue
+
+        if s.lower() in seen:
+            continue
+
+        # remove promo junk
+        if "workshop" in s.lower() or "register" in s.lower():
+            continue
+
+        seen.add(s.lower())
+        clean.append(s)
+
     return ". ".join(clean[:2]) + "." if clean else text[:150] + "..."
 
 def detect_signal(text):
@@ -73,11 +95,17 @@ def detect_signal(text):
 def extract_domains(html_data):
     urls = re.findall(r"https?://[^\s\"']+", html_data)
     domains = []
+
     for url in urls:
         d = re.sub(r"https?://(www\.)?", "", url).split("/")[0]
         domains.append(d)
 
-    BAD = ["facebook.com", "twitter.com", "linkedin.com", "google.com", "youtube.com"]
+    BAD = [
+        "facebook.com", "twitter.com", "linkedin.com",
+        "google.com", "youtube.com", "x.com",
+        "cloudflare.com", "challenges.cloudflare.com"
+    ]
+
     domains = [d for d in domains if not any(b in d for b in BAD)]
 
     return list(set(domains))
@@ -86,13 +114,13 @@ def generate_outreach_idea(text):
     text = text.lower()
 
     if "expand" in text or "new market" in text:
-        return "Pitch localized SEO + country-specific backlinks"
+        return "Pitch localized SEO + country backlinks"
     elif "funding" in text or "raised" in text:
-        return "Target for authority link-building (DR growth phase)"
+        return "Target for DR growth link-building"
     elif "launch" in text:
-        return "Pitch product launch SEO + PR backlinks"
+        return "Pitch product SEO + PR backlinks"
     elif "acquisition" in text:
-        return "Offer brand consolidation + backlink strategy"
+        return "Offer backlink consolidation strategy"
     else:
         return "Explore SEO partnership opportunity"
 
@@ -110,7 +138,7 @@ insights = []
 for article in articles:
     is_signal = detect_signal(article["content"])
 
-    summary = clean_summary(article["content"])
+    summary = article["title"] + " — " + clean_summary(article["content"])
     domains = extract_domains(article["html"])
     idea = generate_outreach_idea(article["content"])
 
@@ -170,9 +198,6 @@ html_content = f"""
 # ---------------- EMAIL SEND ---------------- #
 
 print("Sending email...")
-
-if not EMAIL_PASSWORD:
-    raise ValueError("EMAIL_PASSWORD missing")
 
 msg = MIMEText(html_content, "html")
 msg["Subject"] = "LD Outreach Signals"
