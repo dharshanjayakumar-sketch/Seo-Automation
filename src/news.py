@@ -20,7 +20,12 @@ EMAIL_SENDER = "dharshan.jayakumar@joytechnologies.com"
 
 EMAIL_RECEIVERS = [
     "dharshanofficial134@gmail.com",
-    "dharshan.jayakumar@joytechnologies.com"
+    "dharshan.jayakumar@joytechnologies.com",
+    "sakthi.abirami@joytechnologies.com",
+    "shunmugamoorthy.s@joytechnologies.com",
+    "vimal.munusamy@joytechnologies.com",
+    "abinaya.velmurugan@joytechnologies.com",
+    "rajkumar.rajendran@joytechnologies.com"
 ]
 
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
