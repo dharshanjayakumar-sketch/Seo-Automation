@@ -42,7 +42,7 @@ def get_articles():
         parsed = feedparser.parse(feed)
         for entry in parsed.entries[:3]:
             text, html_data = get_article_data(entry.link)
-            if len(text) > 400:
+            if len(text) > 300:
                 articles.append({
                     "title": entry.title,
                     "content": text[:1200],
@@ -55,7 +55,8 @@ def get_articles():
 def clean_summary(text):
     text = re.sub(r"\s+", " ", text)
     sentences = text.split(".")
-    return ". ".join([s.strip() for s in sentences if len(s) > 50][:2]) + "."
+    clean = [s.strip() for s in sentences if len(s.strip()) > 40]
+    return ". ".join(clean[:2]) + "." if clean else text[:150] + "..."
 
 def detect_signal(text):
     keywords = [
@@ -64,23 +65,31 @@ def detect_signal(text):
     ]
     return any(k in text.lower() for k in keywords)
 
-def extract_domains(html):
-    urls = re.findall(r"https?://[^\s\"']+", html)
+def extract_domains(html_data):
+    urls = re.findall(r"https?://[^\s\"']+", html_data)
     domains = []
     for url in urls:
         d = re.sub(r"https?://(www\.)?", "", url).split("/")[0]
         domains.append(d)
+
+    BAD = ["facebook.com", "twitter.com", "linkedin.com", "google.com", "youtube.com"]
+    domains = [d for d in domains if not any(b in d for b in BAD)]
+
     return list(set(domains))
 
 def generate_outreach_idea(text):
-    if "expand" in text.lower():
-        return "Pitch localized link-building for new region launch"
-    elif "funding" in text.lower() or "raised" in text.lower():
-        return "Target for brand authority + DR growth campaigns"
-    elif "launch" in text.lower():
-        return "Pitch product-led SEO + backlinks"
+    text = text.lower()
+
+    if "expand" in text or "new market" in text:
+        return "Pitch localized SEO + country-specific backlinks"
+    elif "funding" in text or "raised" in text:
+        return "Target for authority link-building (DR growth phase)"
+    elif "launch" in text:
+        return "Pitch product launch SEO + PR backlinks"
+    elif "acquisition" in text:
+        return "Offer brand consolidation + backlink strategy"
     else:
-        return "Explore general SEO partnership opportunity"
+        return "Explore SEO partnership opportunity"
 
 # ---------------- MAIN ---------------- #
 
@@ -92,39 +101,36 @@ if not articles:
     exit()
 
 insights = []
-all_domains = []
 
 for article in articles:
-    if not detect_signal(article["content"]):
-        continue
+    is_signal = detect_signal(article["content"])
 
     summary = clean_summary(article["content"])
     domains = extract_domains(article["html"])
     idea = generate_outreach_idea(article["content"])
 
-    company = article["title"]
-
     insights.append({
-        "company": company,
+        "company": article["title"],
         "summary": summary,
         "domains": domains[:3],
-        "idea": idea
+        "idea": idea,
+        "priority": "HIGH" if is_signal else "MEDIUM"
     })
 
-    all_domains.extend(domains)
+# ---------------- EMAIL CONTENT ---------------- #
 
 date = datetime.now().strftime("%A, %B %d, %Y")
-
-# ---------------- EMAIL CONTENT ---------------- #
 
 cards = ""
 
 for item in insights[:5]:
+    color = "#e0f2fe" if item["priority"] == "HIGH" else "#f3f0ff"
+
     cards += f"""
-    <div style="background:#f3f0ff;padding:14px;margin-bottom:12px;border-radius:10px;">
-        <b>{html.escape(item['company'])}</b><br><br>
+    <div style="background:{color};padding:14px;margin-bottom:12px;border-radius:10px;">
+        <b>{html.escape(item['company'])}</b> ({item['priority']})<br><br>
         {html.escape(item['summary'])}<br><br>
-        🔗 Domains: {", ".join(item['domains'])}<br>
+        🔗 Domains: {", ".join(item['domains']) if item['domains'] else "N/A"}<br>
         💡 Idea: {item['idea']}
     </div>
     """
@@ -134,22 +140,22 @@ html_content = f"""
 
 <h2>Hi, this is Dharshan’s Automation Feed 🚀</h2>
 
-<p>Here are today’s SEO + company movement signals you can use for LinkDoctor outreach:</p>
+<p>Here are today’s SEO + company movement signals for LinkDoctor outreach:</p>
 
-{cards if cards else "<p>No strong outreach signals today</p>"}
+{cards}
 
 <br>
 
 <h3>Why this helps LD outreach:</h3>
 <ul>
-<li>Identify companies entering new markets</li>
-<li>Find fresh domains before competitors</li>
-<li>Pitch SEO at the right timing (growth stage)</li>
+<li>Catch companies at growth stage</li>
+<li>Find domains early before competitors</li>
+<li>Pitch SEO when intent is highest</li>
 </ul>
 
 <br>
 
-<p>I’ll be back tomorrow with new signals.</p>
+<p>I’ll be back tomorrow with fresh signals.</p>
 
 <p>— Dharshan</p>
 
@@ -159,6 +165,9 @@ html_content = f"""
 # ---------------- EMAIL SEND ---------------- #
 
 print("Sending email...")
+
+if not EMAIL_PASSWORD:
+    raise ValueError("EMAIL_PASSWORD missing")
 
 msg = MIMEText(html_content, "html")
 msg["Subject"] = "LD Outreach Signals"
