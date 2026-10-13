@@ -33,7 +33,7 @@ EMAIL_RECEIVERS = [
     "shunmugamoorthy.s@joytechnologies.com",
     "vimal.munusamy@joytechnologies.com",
     "abinaya.velmurugan@joytechnologies.com",
-    "rajkumar.rajendran@joytechnologies.com",
+    "giri.prasath@joytechnologies.com",
 ]
 
 # Set this in GitHub repository secrets. Never paste your password here.
