@@ -30,12 +30,20 @@ jobs:
           cache-dependency-path: requirements.txt
 
       - name: Install dependencies
-        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
 
-      - name: Validate required secret
+      - name: Validate email secret
         env:
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-        run: python -c "import os,sys; sys.exit(0 if os.getenv('EMAIL_PASSWORD','').strip() else 'ERROR: Add EMAIL_PASSWORD in Settings > Secrets and variables > Actions')"
+        run: |
+          if [ -z "$EMAIL_PASSWORD" ]; then
+            echo "EMAIL_PASSWORD secret is missing."
+            echo "Add it under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          echo "Email secret is configured."
 
       - name: Build and send newsletter
         env:
